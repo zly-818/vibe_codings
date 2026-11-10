@@ -1,0 +1,16 @@
+*.jpg
+*.jpeg
+*.png
+*.mp3
+*.mp4
+
+# 如果想保留某些特定的图片（比如网页需要的按钮），可以用感叹号！
+!返回按钮.png
+!音乐按钮.png
+!蛋糕-noflame.png
+
+node_modules/
+.next/
+.env.local
+.DS_Store
+*.log

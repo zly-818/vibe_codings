@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>To小袁🎂</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 极光渐变背景 + 颗粒 + 花瓣 -->
+  <div class="aurora">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="blob b4"></div>
+  </div>
+  <div class="grain"></div>
+  <div class="petals" id="petals"></div>
+  <div class="danmaku" id="danmaku"></div>
+  <div class="dots" id="dots"></div>
+
+  <!-- 右上角：返回 -->
+  <div class="nav-btns">
+    <button class="nav-btn back" id="backBtn" type="button">← 返回</button>
+  </div>
+
+  <!-- 左上角：音乐开关 -->
+  <button class="music-btn paused" id="musicBtn" type="button" aria-label="音乐开关">
+    <img src="音乐按钮.png" alt="音乐">
+  </button>
+  <audio id="bgm" src="小袁2.mp3" preload="auto"></audio>
+
+  <!-- ══════════ 第 1 屏：封面 ══════════ -->
+  <section class="screen cover active">
+    <img class="cover-video" src="小人透明.webp" alt="小人">
+    <p class="cover-dedi">朱璐瑶送给最亲爱的袁文静</p>
+    <div class="tap-hint">👆 点一下开始</div>
+  </section>
+
+  <!-- ══════════ 第 2 屏：蛋糕 + 吹蜡烛 ══════════ -->
+  <section class="screen">
+    <h2>🎂 先点蜡烛许个愿</h2>
+    <p class="sub">点一点蜡烛，把它们吹灭</p>
+    <div class="cake-wrap">
+      <img class="cake-img" src="蛋糕-noflame.png" alt="生日蛋糕">
+      <div class="candle" style="left: 40.5%; top: 9.3%;"><span class="flame"></span><span class="smoke"></span></div>
+      <div class="candle" style="left: 50.1%; top: 8.4%;"><span class="flame"></span><span class="smoke"></span></div>
+      <div class="candle" style="left: 58.1%; top: 9.8%;"><span class="flame"></span><span class="smoke"></span></div>
+    </div>
+    <div class="candle-status" id="candleStatus">还剩 3 根蜡烛，点蜡烛吹灭 🕯️</div>
+  </section>
+
+  <!-- ══════════ 第 3 屏：许愿 ══════════ -->
+  <section class="screen">
+    <div class="wish-wrap">
+      <div class="star"></div>
+      <h2>🌠 闭上眼睛，许个愿吧</h2>
+      <p class="sub">把所有美好都收进心里 · 点一下继续</p>
+    </div>
+  </section>
+
+  <!-- ══════════ 第 4 屏：照片墙 ══════════ -->
+  <section class="screen">
+    <div class="photos">
+      <div class="photo"><div class="photo-frame"><img src="1.jpg" alt="回忆 1"></div></div>
+      <div class="photo"><div class="photo-frame"><img src="2.jpg" alt="回忆 2"></div></div>
+      <div class="photo"><div class="photo-frame"><img src="3.jpg" alt="回忆 3"></div></div>
+      <div class="photo"><div class="photo-frame"><img src="4.jpg" alt="回忆 4"></div></div>
+      <div class="photo"><div class="photo-frame"><img src="5.jpg" alt="回忆 5"></div></div>
+      <div class="photo"><div class="photo-frame"><img src="6.jpg" alt="回忆 6"></div></div>
+    </div>
+  </section>
+
+  <!-- ══════════ 第 5 屏：生日贺卡（信封） ══════════ -->
+  <section class="screen">
+    <h2>💌 还有一封信给你</h2>
+    <p class="sub">点一下信封打开，再点一下继续</p>
+    <div class="envelope" id="envelope">
+      <svg class="env-svg" viewBox="0 0 360 250" role="img" aria-label="信封">
+        <rect x="10" y="28" width="340" height="212" rx="16" fill="#FE97A8"/>
+        <path d="M10 28 L180 142 L350 28 L350 240 L10 240 Z" fill="#FFB2BD"/>
+        <path d="M10 28 L180 142 L350 28 Z" fill="#FF8FA4"/>
+        <path d="M10 28 L180 142 L350 28" fill="none" stroke="#F06E88" stroke-width="2.5" stroke-linejoin="round"/>
+        <circle cx="180" cy="140" r="25" fill="#FFE2E8" stroke="#FE97A8" stroke-width="3"/>
+        <text x="180" y="148" text-anchor="middle" font-size="22">💗</text>
+      </svg>
+      <div class="letter">
+        <div class="letter-text">
+          <p class="letter-to">TO 小袁：</p>
+          <p class="letter-hey">嘿嘿！</p>
+          <p class="letter-body">今天就是农历9月21了。作为你的好闺蜜，我必须速速送上祝福。哎呀，哈哈哈，本来想写长一点，然后感觉好矫情啊。也是相互见证着从前的小小的我们变成现在的独当一面的小大人了。路还很长，我们永远在彼此身后。总之，淡淡的我遇上了热情大方开朗的你，很心安！</p>
+          <p class="letter-wish">生日快乐呀，小袁</p>
+          <p class="letter-ps">（不只生日hhh）</p>
+        </div>
+        <div class="letter-sign">—— 朱璐瑶</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 第 6 屏：弹幕雨（压轴） ══════════ -->
+  <section class="screen finale">
+    <h2>🎉 生日快乐，小袁！</h2>
+    <div class="tap-hint">👆 点一下，后面还有小惊喜</div>
+  </section>
+
+  <!-- ══════════ 第 7 屏（最后）：双人五子棋 + 解压小游戏 ══════════ -->
+  <section class="screen hub">
+    <div class="hub-btns">
+      <button class="hub-btn" id="gomokuBtn" type="button">双人五子棋 ⚫⚪</button>
+      <button class="hub-btn" id="sandGameBtn" type="button">一个解压小游戏 🌈</button>
+      <button class="hub-btn" id="needleBtn" type="button">来个见缝插针 🧵</button>
+    </div>
+    <button class="hub-home" id="homeBtn" type="button">🏠 返回首页</button>
+  </section>
+
+  <!-- 解压小游戏：彩色沙瓶 -->
+  <div class="overlay" id="sandOverlay">
+    <div class="sand-box">
+      <div class="sand-head">
+        <h2>🌈 彩色沙瓶</h2>
+        <button class="overlay-close" data-close type="button">✕</button>
+      </div>
+      <canvas id="sandCanvas" width="300" height="400"></canvas>
+      <div class="sand-palette" id="sandPalette"></div>
+      <div class="sand-actions">
+        <button class="sand-act" id="sandClear" type="button">🔄 重新开始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 双人五子棋 -->
+  <div class="overlay" id="gomokuOverlay">
+    <div class="sand-box">
+      <div class="sand-head">
+        <h2>⚫⚪ 双人五子棋</h2>
+        <button class="overlay-close" data-close type="button">✕</button>
+      </div>
+      <p class="sand-tip" id="gomokuTurn">⚫ 黑棋先下 · 点击棋盘落子</p>
+      <canvas id="gomokuCanvas" width="420" height="420"></canvas>
+      <div class="sand-actions">
+        <button class="sand-act" id="gomokuReset" type="button">🔄 重新开局</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 见缝插针小游戏 -->
+  <div class="overlay" id="needleOverlay">
+    <div class="sand-box">
+      <div class="sand-head">
+        <h2>🧵 来个见缝插针</h2>
+        <button class="overlay-close" data-close type="button">✕</button>
+      </div>
+      <p class="sand-tip" id="needleTip">点击发射针，别碰到其他针</p>
+      <canvas id="needleCanvas" width="360" height="400"></canvas>
+      <div class="sand-actions">
+        <button class="sand-act" id="needleReset" type="button">🔄 重新开始</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 进入问候弹窗 -->
+  <div class="overlay greet-overlay" id="greetOverlay">
+    <div class="overlay-card greet-card">
+      <div class="greet-icon" id="greetIcon">🌤️</div>
+      <div class="greet-text" id="greetText">早上好，小袁</div>
+      <div class="greet-sub">今天是你的 21 岁生日，点一下开始吧 🎂</div>
+      <button class="btn greet-btn" id="greetBtn" type="button">点我进入</button>
+    </div>
+  </div>
+
+
+<script src="script.js"></script>
+</body>
+</html>

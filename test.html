@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>3D Birthday Card · Hand Controlled</title>
+<style>
+  body { margin:0; overflow:hidden; font-family:'Inter','Segoe UI',sans-serif; background:#0b0a0c; color:#fff; }
+  #info { position:absolute; top:20px; left:20px; background:rgba(0,0,0,.5); backdrop-filter:blur(8px);
+          padding:12px 24px; border-radius:40px; border:1px solid rgba(255,200,150,.3);
+          font-size:14px; letter-spacing:1px; color:#f5e6d3; box-shadow:0 4px 15px rgba(0,0,0,.6); z-index:100; }
+  #hand-status { position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+          background:rgba(20,15,10,.7); backdrop-filter:blur(12px); padding:10px 30px;
+          border-radius:50px; border:1px solid rgba(255,180,100,.5); font-size:16px; font-weight:500;
+          color:#ffdfb0; box-shadow:0 0 30px rgba(255,150,50,.3); z-index:100; transition:all .3s; white-space:nowrap; }
+  #hand-status.open { border-color:#ffaa55; box-shadow:0 0 40px #ff9933; color:#fff3e0; }
+  .music-btn { position:absolute; bottom:30px; right:30px; width:50px; height:50px; border-radius:50%;
+          background:rgba(0,0,0,.5); backdrop-filter:blur(8px); border:1px solid rgba(255,200,150,.5);
+          color:#ffdfb0; display:flex; align-items:center; justify-content:center; cursor:pointer;
+          z-index:200; font-size:24px; user-select:none; transition:.2s; }
+  .music-btn:hover { background:rgba(255,180,100,.3); border-color:#ffaa55; }
+  .loading { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#ffdfb0;
+          font-size:18px; background:rgba(0,0,0,.6); padding:12px 30px; border-radius:40px;
+          backdrop-filter:blur(8px); border:1px solid rgba(255,200,150,.3); z-index:300; transition:opacity .6s; }
+  #errorBox { position:absolute; bottom:100px; left:50%; transform:translateX(-50%);
+          background:rgba(180,30,30,.9); color:#fff; padding:12px 24px; border-radius:12px;
+          font-size:14px; max-width:80%; z-index:400; display:none; }
+</style>
+</head>
+<body>
+  <div id="info">🕯️ 3D BIRTHDAY CARD · HAND GESTURE CONTROL</div>
+  <div id="hand-status">🖐️ OPEN YOUR HAND TO OPEN THE CARD (or press O)</div>
+  <div class="music-btn" id="musicBtn">🔊</div>
+  <div class="loading" id="loadingMsg">Loading AI Model...</div>
+  <div id="errorBox"></div>
+
+  <!-- 摄像头隐藏视频 -->
+  <video id="video" style="display:none" playsinline></video>
+
+  <!-- MediaPipe (UMD 普通脚本，挂到 window 上) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+
+  <!-- Three.js importmap -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    // ====== 全局错误提示 ======
+    window.addEventListener('error', e => {
+      const box = document.getElementById('errorBox');
+      box.style.display = 'block';
+      box.textContent = '⚠️ ' + (e.message || 'Unknown error');
+    });
+
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ====== 场景 / 相机 / 渲染器 ======
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0a0c);
+
+    const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1000);
+    camera.position.set(0, 3, 18);
+
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.body.appendChild(renderer.domElement);
+
+    // ====== 灯光 / 烛光氛围 ======
+    scene.add(new THREE.AmbientLight(0x404060, 1));
+
+    const p1 = new THREE.PointLight(0xffaa55, 20, 60); p1.position.set(5, 5, 10); scene.add(p1);
+    const p2 = new THREE.PointLight(0xff8833, 15, 50); p2.position.set(-6, 3, 8); scene.add(p2);
+    const p3 = new THREE.PointLight(0xffaa77, 8, 80);  p3.position.set(4, -4, 15); scene.add(p3);
+
+    // 光晕纹理
+    function glowTex() {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d').createRadialGradient(32,32,0,32,32,32);
+      g.addColorStop(0, 'rgba(255,200,100,1)');
+      g.addColorStop(0.4, 'rgba(255,150,50,0.6)');
+      g.addColorStop(1, 'rgba(255,100,0,0)');
+      const ctx = c.getContext('2d'); ctx.fillStyle = g; ctx.fillRect(0,0,64,64);
+      return new THREE.CanvasTexture(c);
+    }
+    const gt = glowTex();
+    [[5,5,5,10,0.4], [-8,2,0,12,0.3], [0,-6,10,20,0.2]].forEach(([x,y,z,s,o]) => {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map:gt, blending:THREE.AdditiveBlending, transparent:true, opacity:o, depthWrite:false }));
+      sp.position.set(x,y,z); sp.scale.set(s,s,1); scene.add(sp);
+    });
+
+    // 背景漂浮粒子
+    const bgGeo = new THREE.BufferGeometry();
+    const bgCount = 800, bgPos = new Float32Array(bgCount*3);
+    for (let i=0; i<bgCount*3; i+=3) {
+      bgPos[i]   = (Math.random()-0.5)*2000;
+      bgPos[i+1] = (Math.random()-0.5)*2000;
+      bgPos[i+2] = (Math.random()-0.5)*2000 - 500;
+    }
+    bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+    scene.add(new THREE.Points(bgGeo, new THREE.PointsMaterial({
+      color:0xffaa55, size:1.5, transparent:true, opacity:0.15, blending:THREE.AdditiveBlending
+    })));
+
+    // ====== 鼠标拖动旋转 ======
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 2, 0);
+    controls.minDistance = 6;
+    controls.maxDistance = 30;
+    controls.maxPolarAngle = Math.PI/2.1;
+
+    // ====== 贺卡 ======
+    const cardGroup = new THREE.Group();
+    cardGroup.position.set(0, 2, 0);
+    scene.add(cardGroup);
+
+    const W = 4.5, H = 6.5, T = 0.15;
+
+    // 封面组（绕左边缘旋转打开）
+    const coverGroup = new THREE.Group();
+    coverGroup.position.set(-W/2, 0, T/2);   // 铰链在左边缘
+    cardGroup.add(coverGroup);
+    const coverInner = new THREE.Group();
+    coverInner.position.set(W/2, 0, 0);      // 抵消回来，让封面居中于 cardGroup
+    coverGroup.add(coverInner);
+
+    // 内页
+    const insideGroup = new THREE.Group();
+    insideGroup.position.set(0, 0, -T/2);
+    cardGroup.add(insideGroup);
+
+    // ---- 画蛋糕封面纹理 ----
+    function cakeTexture() {
+      const c = document.createElement('canvas'); c.width = c.height = 512;
+      const ctx = c.getContext('2d');
+      const bg = ctx.createLinearGradient(0,0,0,512);
+      bg.addColorStop(0,'#ffdde1'); bg.addColorStop(1,'#fbc2eb');
+      ctx.fillStyle = bg; ctx.fillRect(0,0,512,512);
+      // 波点
+      ctx.fillStyle = '#ffffff80';
+      for (let i=0;i<25;i++){ ctx.beginPath(); ctx.arc(Math.random()*512,Math.random()*512,Math.random()*15+5,0,7); ctx.fill(); }
+      // 蛋糕层
+      const layers = [
+        [380,140,40,'#f7d1a0'],[350,135,35,'#fff0e0'],
+        [310,110,35,'#f7b56e'],[285,105,30,'#fff0e0'],
+        [250,80,30,'#f7a55e'],[230,75,25,'#fff0e0']
+      ];
+      layers.forEach(([y,rx,ry,col])=>{
+        ctx.fillStyle = col; ctx.shadowColor='#b87c4b'; ctx.shadowBlur=12; ctx.shadowOffsetY=4;
+        ctx.beginPath(); ctx.ellipse(256,y,rx,ry,0,0,7); ctx.fill();
+      });
+      // 蜡烛
+      ctx.shadowBlur=10; ctx.fillStyle='#ff6b9d'; ctx.fillRect(240,170,12,60);
+      ctx.fillStyle='#ffb3c6'; ctx.fillRect(242,172,8,56);
+      // 火焰
+      ctx.shadowColor='#ffaa00'; ctx.shadowBlur=25;
+      ctx.fillStyle='#ffcc33'; ctx.beginPath(); ctx.ellipse(246,155,10,18,0,0,7); ctx.fill();
+      ctx.fillStyle='#ffaa00'; ctx.beginPath(); ctx.ellipse(246,158,6,12,0,0,7); ctx.fill();
+      // 糖粒
+      const cols=['#ff4d6d','#ffb347','#6a5acd','#4caf50','#ff69b4','#00bcd4'];
+      for (let i=0;i<50;i++){
+        ctx.fillStyle=cols[i%cols.length]; ctx.shadowBlur=6;
+        ctx.beginPath(); ctx.arc(150+Math.random()*220,200+Math.random()*200,Math.random()*6+2,0,7); ctx.fill();
+      }
+      // 文字
+      ctx.shadowColor='#aa3366'; ctx.shadowBlur=8;
+      ctx.font='bold 44px "Segoe UI",cursive'; ctx.fillStyle='#fff'; ctx.textAlign='center';
+      ctx.fillText('HAPPY', 256, 80);
+      ctx.font='bold 38px "Segoe UI",cursive'; ctx.fillText('BIRTHDAY', 256, 130);
+      return new THREE.CanvasTexture(c);
+    }
+
+    const coverMat = new THREE.MeshStandardMaterial({
+      map: cakeTexture(),
+      emissive: 0x553322, emissiveIntensity: 0.3,
+      roughness: 0.4, metalness: 0.1
+    });
+    const coverMesh = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), coverMat);
+    coverMesh.castShadow = coverMesh.receiveShadow = true;
+    coverInner.add(coverMesh);
+
+    // ---- 内页纹理 ----
+    function insideTexture() {
+      const c = document.createElement('canvas'); c.width = c.height = 512;
+      const ctx = c.getContext('2d');
+      const bg = ctx.createLinearGradient(0,0,0,512);
+      bg.addColorStop(0,'#fff9f0'); bg.addColorStop(1,'#ffe6d5');
+      ctx.fillStyle = bg; ctx.fillRect(0,0,512,512);
+      ctx.strokeStyle='#f7b56e'; ctx.lineWidth=8; ctx.strokeRect(20,20,472,472);
+      ctx.strokeStyle='#ff8c42'; ctx.lineWidth=2; ctx.strokeRect(35,35,442,442);
+      ctx.shadowColor='#cc9966'; ctx.shadowBlur=8; ctx.textAlign='center';
+      ctx.font='bold 56px "Segoe UI",Georgia,serif'; ctx.fillStyle='#b3541e';
+      ctx.fillText('Dear Han,', 256, 150);
+      ctx.font='bold 44px "Segoe UI",Georgia,serif'; ctx.fillStyle='#d45d2e';
+      ctx.fillText('Happy Birthday!', 256, 240);
+      ctx.font='26px "Segoe UI",Georgia,serif'; ctx.fillStyle='#7a4a2e'; ctx.shadowBlur=4;
+      ctx.fillText('Wishing you a day', 256, 330);
+      ctx.fillText('filled with joy, laughter', 256, 380);
+      ctx.fillText('and all your dreams', 256, 430);
+      ctx.fillText('coming true. 🎂', 256, 480);
+      return new THREE.CanvasTexture(c);
+    }
+
+    const insideMat = new THREE.MeshStandardMaterial({
+      map: insideTexture(), emissive: 0x443322, emissiveIntensity: 0.2, roughness: 0.5
+    });
+    const insideMesh = new THREE.Mesh(new THREE.BoxGeometry(W-0.1, H-0.1, 0.05), insideMat);
+    insideGroup.add(insideMesh);
+    const backBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(W, H, 0.1),
+      new THREE.MeshStandardMaterial({ color:0xddbb99, roughness:0.7 })
+    );
+    backBoard.position.z = -0.1;
+    insideGroup.add(backBoard);
+
+    // ====== 爱心彩带粒子 ======
+    const heartsGroup = new THREE.Group();
+    scene.add(heartsGroup);
+
+    function heartTexture(col) {
+      const c = document.createElement('canvas'); c.width = c.height = 32;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(16,8);
+      ctx.bezierCurveTo(16,4,8,0,4,6);
+      ctx.bezierCurveTo(0,12,8,20,16,26);
+      ctx.bezierCurveTo(24,20,32,12,28,6);
+      ctx.bezierCurveTo(24,0,16,4,16,8);
+      ctx.fill();
+      return new THREE.CanvasTexture(c);
+    }
+
+    const heartCols = ['#ff6b9d','#ff8c42','#ffd966','#b5e48c','#90e0ef','#c77dff','#f48c7c'];
+    const heartCount = 120;
+    const hearts = [];
+    for (let i=0;i<heartCount;i++){
+      const col = heartCols[i % heartCols.length];
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: heartTexture(col), blending:THREE.AdditiveBlending, depthWrite:false,
+        transparent:true, opacity:0
+      }));
+      sp.scale.set(0.3,0.3,1);
+      sp.userData = { vel:new THREE.Vector3(), life:999, maxLife:1, initScale:0.2+Math.random()*0.3 };
+      heartsGroup.add(sp);
+      hearts.push(sp);
+    }
+
+    function burstHearts() {
+      hearts.forEach(h => {
+        h.position.set((Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5, 0.3);
+        h.userData.vel.set((Math.random()-0.5)*0.18, (Math.random()-0.5)*0.18+0.1, (Math.random()-0.5)*0.18+0.06);
+        h.userData.life = 0;
+        h.userData.maxLife = 2 + Math.random()*2.5;
+        h.material.opacity = 0.95;
+        h.scale.setScalar(h.userData.initScale);
+      });
+    }
+    function clearHearts() {
+      hearts.forEach(h => { h.userData.life = 999; h.material.opacity = 0; });
+    }
+
+    // ====== 状态 ======
+    let cardOpen = false;
+    let targetRotY = 0;         // 封面目标角度
+    let currentRotY = 0;        // 当前角度（用于平滑过渡）
+    const OPEN_ANGLE = -Math.PI * 0.95;   // 向左翻开
+
+    // ====== 音乐（Web Audio 合成生日歌） ======
+    let audioCtx = null, musicTimer = null, musicPlaying = false, musicEnabled = true;
+    const melody = [
+      ['G4',.4],['G4',.2],['A4',.6],['G4',.6],['C5',.6],['B4',1],
+      ['G4',.4],['G4',.2],['A4',.6],['G4',.6],['D5',.6],['C5',1],
+      ['G4',.4],['G4',.2],['G5',.6],['E5',.6],['C5',.6],['B4',.6],['A4',1],
+      ['F5',.4],['F5',.2],['E5',.6],['C5',.6],['D5',.6],['C5',1.2]
+    ];
+    const freq = { G4:392, A4:440, B4:493.88, C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99 };
+
+    function playSong() {
+      if (musicPlaying) return;
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      musicPlaying = true;
+      let idx = 0;
+      const tick = () => {
+        if (!musicPlaying) return;
+        if (idx >= melody.length) idx = 0;
+        const [n, dur] = melody[idx];
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq[n];
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur*0.85);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + dur);
+        idx++;
+        musicTimer = setTimeout(tick, dur*1000);
+      };
+      tick();
+    }
+    function stopSong() {
+      musicPlaying = false;
+      if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+    }
+
+    const musicBtn = document.getElementById('musicBtn');
+    musicBtn.addEventListener('click', () => {
+      musicEnabled = !musicEnabled;
+      musicBtn.textContent = musicEnabled ? '🔊' : '🔇';
+      if (!musicEnabled) stopSong();
+      else if (cardOpen) playSong();
+    });
+
+    // ====== 打开 / 关闭贺卡的统一入口 ======
+    const statusEl = document.getElementById('hand-status');
+    function setCardOpen(open, byHand = true) {
+      if (open === cardOpen) return;
+      cardOpen = open;
+      if (open) {
+        targetRotY = OPEN_ANGLE;
+        burstHearts();
+        if (musicEnabled) playSong();
+        statusEl.textContent = byHand ? '🖐️ HAND OPEN · OPENING CARD' : '🖐️ OPENING CARD';
+        statusEl.classList.add('open');
+      } else {
+        targetRotY = 0;
+        clearHearts();
+        stopSong();
+        statusEl.textContent = byHand ? '✊ HAND CLOSED · CLOSING CARD' : '✊ CLOSING CARD';
+        statusEl.classList.remove('open');
+      }
+    }
+
+    // ====== 键盘备用 ======
+    window.addEventListener('keydown', e => {
+      if (e.key === 'o' || e.key === 'O') setCardOpen(true, false);
+      if (e.key === 'c' || e.key === 'C') setCardOpen(false, false);
+    });
+
+    // ====== MediaPipe Hands ======
+    const loadingEl = document.getElementById('loadingMsg');
+    const videoEl = document.getElementById('video');
+    let isHandOpen = false;
+
+    function initHands() {
+      if (!window.Hands || !window.Camera) {
+        loadingEl.textContent = '⚠️ MediaPipe failed to load · Press O / C to control';
+        setTimeout(()=> loadingEl.style.display='none', 2500);
+        return;
+      }
+      const hands = new window.Hands({
+        locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
+      });
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 0,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6
+      });
+      hands.onResults(res => {
+        if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+          const lm = res.multiHandLandmarks[0];
+          const wrist = lm[0], palmBase = lm[9];
+          const palm = Math.hypot(wrist.x-palmBase.x, wrist.y-palmBase.y, wrist.z-palmBase.z);
+          if (palm < 0.01) return;
+          const tips  = [4, 8, 12, 16, 20];
+          const joints= [3, 6, 10, 14, 18];
+          let extended = 0;
+          for (let i=0;i<tips.length;i++){
+            const t = lm[tips[i]], j = lm[joints[i]];
+            const dt = Math.hypot(t.x-wrist.x, t.y-wrist.y, t.z-wrist.z);
+            const dj = Math.hypot(j.x-wrist.x, j.y-wrist.y, j.z-wrist.z);
+            if (dt > dj * 1.1) extended++;
+          }
+          const open = extended >= 3;
+          if (open !== isHandOpen) {
+            isHandOpen = open;
+            setCardOpen(open, true);
+          }
+        }
+      });
+
+      const cam = new window.Camera(videoEl, {
+        onFrame: async () => { await hands.send({ image: videoEl }); },
+        width: 640, height: 480
+      });
+      cam.start().then(() => {
+        loadingEl.style.opacity = '0';
+        setTimeout(()=> loadingEl.style.display = 'none', 600);
+      }).catch(err => {
+        console.warn('Camera error:', err);
+        loadingEl.textContent = '⚠️ Camera blocked · Press O / C to control';
+        setTimeout(()=> loadingEl.style.display = 'none', 3000);
+      });
+    }
+    initHands();
+
+    // ====== 动画循环 ======
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const t = clock.elapsedTime;
+
+      // 封面平滑旋转
+      currentRotY += (targetRotY - currentRotY) * Math.min(1, dt * 8);
+      coverGroup.rotation.y = currentRotY;
+
+      // 烛光摇曳
+      p1.intensity = 18 + Math.sin(t*4.1)*3 + Math.sin(t*11)*1.5;
+      p2.intensity = 14 + Math.sin(t*3.3+1)*3 + Math.sin(t*9.7)*1.2;
+      p3.intensity = 8 + Math.sin(t*2.7+2)*2;
+      p1.position.x = 5 + Math.sin(t*0.7)*0.3;
+      p2.position.x = -6 + Math.cos(t*0.5)*0.3;
+      p1.position.y = 5 + Math.sin(t*1.1)*0.2;
+
+      // 爱心彩带
+      hearts.forEach(h => {
+        if (h.userData.life < h.userData.maxLife) {
+          h.userData.life += dt;
+          h.userData.vel.y -= 0.15 * dt;
+          h.position.x += h.userData.vel.x;
+          h.position.y += h.userData.vel.y;
+          h.position.z += h.userData.vel.z;
+          h.material.rotation += dt * 3;
+          const lifeRatio = h.userData.life / h.userData.maxLife;
+          h.material.opacity = Math.max(0, 0.95 * (1 - lifeRatio));
+          h.scale.setScalar(h.userData.initScale * (1 + lifeRatio * 0.5));
+        } else {
+          h.material.opacity = 0;
+        }
+      });
+
+      // 贺卡整体轻微漂浮
+      cardGroup.position.y = 2 + Math.sin(t*1.2)*0.08;
+      cardGroup.rotation.y = Math.sin(t*0.4)*0.05;
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // 窗口自适应
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
